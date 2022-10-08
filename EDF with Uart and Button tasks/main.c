@@ -297,4 +297,3 @@ GPIO_write(PORT_0,PIN4,!GPIO_read(PORT_0,PIN4));
 
 #endif
 
-
