@@ -89,11 +89,9 @@ static void prvSetupHardware( void );
 /*-----------------------------------------------------------*/
 
 
-/*
- * Application entry point:
- * Starts all the other tasks, then starts the scheduler. 
- */
-					
+TaskHandle_t 	*Periodic_Transmitter_Hnd =NULL;
+TaskHandle_t 	*Uart_Receiver_Hnd = NULL;
+
 QueueHandle_t xQueue ;														
 QueueHandle_t xQueue1 ;														
 									
@@ -190,24 +188,17 @@ This task will send preiodic string every 100ms to the consumer task*/
 void Periodic_Transmitter (void *pvParameter)
 {
 	TickType_t  PreviousWakeTime = xTaskGetTickCount();
-
-	const char * s ="From Periodic_Transmitter..!\n";//20 ,5
-		char Pc_String[29];
-	strcpy(Pc_String, "\nPeriodic Transmitter. 100ms.");
-
+	const char * s ="\nFrom Periodic_Transmitter..!\n";//20 ,5
 	for(;;){
 		//Write to the the Queue
     if( xQueue != 0 )
     {
-        /* Send an unsigned long.  Wait for 10 ticks for space to become available if necessary. */
-			int i =0;
-			for( i = 0 ; i < 29 ; i++){//&s[i]
-        if( xQueueSend( xQueue, ( void * ) (Pc_String+i), ( TickType_t ) Periodic_Transmitter_PERIODICITY ) != pdPASS )
-					{
-							/* Failed to post the message, even after 10 ticks. */
-					}
-				}
+       /* Send an unsigned long.  Wait for 10 ticks for space to become available if necessary. */
+		int i =0;
+		for( i = 0 ; i < 29 ; i++){//&s[i]
+        	 xQueueSend( xQueue,(&s[i]), Periodic_Transmitter_PERIODICITY ) ;
 		}
+	}
 		vTaskDelayUntil(&PreviousWakeTime,Periodic_Transmitter_PERIODICITY);//Delay a task until a specified time. This function can be used by periodic tasks to ensure a constant execution frequency.
 	}
 }
@@ -227,24 +218,19 @@ void Uart_Receiver (void *pvParameter)
 	int j;
 	
 	for(;;){
-		//GPIO_write(PORT_0,PIN2,!GPIO_read(PORT_0,PIN2));
+		GPIO_write(PORT_0,PIN2,!GPIO_read(PORT_0,PIN2));
 		//Read from Queue and send it over UART TX
-
-
 				#if 1
 		if(uxQueueMessagesWaiting(xQueue) != 0){
-				for( j = 0 ; j < 29; j++){
-				xQueueReceive( xQueue,  (string_buffer+j),  0 ); //0 >> DONOT BLOCK THE CODE
-				
-				}
-				vSerialPutString(( signed char *)&string_buffer,UART_RECEIVER_MAX_LENGHT);
-				xQueueReset(xQueue);
+			for( j = 0 ; j < 29; j++){
+				xQueueReceive( xQueue,  (string_buffer+j),  0 ); //0 >> DONOT BLOCK THE CODE		
+			}
+		vSerialPutString(( signed char *)&string_buffer,UART_RECEIVER_MAX_LENGHT);
+		xQueueReset(xQueue);
 			}
 				#endif
-				
-	//vSerialPutString(( signed char *)pxMEASSAGE->ID,UART_RECEIVER_MAX_LENGHT);			
-	//vSerialPutString(( signed char *)pxMEASSAGE->string,UART_RECEIVER_MAX_LENGHT);
-	vTaskDelayUntil(&PreviousWakeTime,UART_RECEIVER_PERIODICITY);//Delay a task until a specified time. This function can be used by periodic tasks to ensure a constant execution frequency.
+			
+		vTaskDelayUntil(&PreviousWakeTime,UART_RECEIVER_PERIODICITY);//Delay a task until a specified time. This function can be used by periodic tasks to ensure a constant execution frequency.
 	}
 
 }
@@ -266,7 +252,7 @@ int main( void )
 	
 	/* Setup the hardware for use with the Keil demo board. */
 	prvSetupHardware();
-  xSerialPortInitMinimal(ser115200);
+ // xSerialPortInitMinimal(ser115200);
 	
 
 
@@ -284,8 +270,8 @@ int main( void )
 #endif
 	//xTaskPeriodicCreate( Button_1_Monitor, ( const char * ) "Button_1_Monitor", configMINIMAL_STACK_SIZE, NULL,1, NULL, 50 );
 	//xTaskPeriodicCreate( Button_2_Monitor, ( const char * ) "Button_2_Monitor", configMINIMAL_STACK_SIZE, NULL,1, NULL, 50 );
-	xTaskPeriodicCreate( Periodic_Transmitter, ( const char * ) "Periodic_Transmitter", configMINIMAL_STACK_SIZE, NULL,1, NULL, Periodic_Transmitter_PERIODICITY );
-	xTaskPeriodicCreate( Uart_Receiver , ( const char * ) "Uart_Receiver", configMINIMAL_STACK_SIZE, NULL,1, NULL, UART_RECEIVER_PERIODICITY );
+	xTaskPeriodicCreate( Periodic_Transmitter, ( const char * ) "Periodic_Transmitter", configMINIMAL_STACK_SIZE, NULL,1, Periodic_Transmitter_Hnd, Periodic_Transmitter_PERIODICITY );
+	xTaskPeriodicCreate( Uart_Receiver , ( const char * ) "Uart_Receiver", configMINIMAL_STACK_SIZE, NULL,1, Uart_Receiver_Hnd, UART_RECEIVER_PERIODICITY );
 	//For debug
 	///xTaskPeriodicCreate( TestGPIO , ( const char * ) "Test", configMINIMAL_STACK_SIZE, NULL,1, NULL, 5 );
 	#else
@@ -355,5 +341,4 @@ GPIO_write(PORT_0,PIN4,!GPIO_read(PORT_0,PIN4));
 }
 
 #endif
-
 
