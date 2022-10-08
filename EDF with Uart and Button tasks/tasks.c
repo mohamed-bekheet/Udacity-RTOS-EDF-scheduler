@@ -1,3 +1,6 @@
+
+/*testgithubfile.c*/
+
 /*
  * FreeRTOS Kernel V10.4.6
  * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
@@ -218,19 +221,19 @@
  * Place the task represented by pxTCB into the appropriate ready list for
  * the task.  It is inserted at the end of the list.
  */
-/*Edited for EDF schedular*/
 #if configUSE_EDF_SCHEDULER == 0
-  #define prvAddTaskToReadyList( pxTCB )\
-       	traceMOVED_TASK_TO_READY_STATE( pxTCB );\
-		taskRECORD_READY_PRIORITY( ( pxTCB )->uxPriority );\
-		listINSERT_END( &( pxReadyTasksLists[ ( pxTCB )->uxPriority ] ), &( ( pxTCB )->xStateListItem ) );\
-		tracePOST_MOVED_TASK_TO_READY_STATE( pxTCB )#else
-#else 
-    /*Edited for EDF schedular*/
-    #define prvAddTaskToReadyList( pxTCB ) /*xGenericListIteam must contain thedeadline value */ \
-	traceMOVED_TASK_TO_READY_STATE(pxTCB);\
+		
+	#define prvAddTaskToReadyList( pxTCB )                                                                 \
+		traceMOVED_TASK_TO_READY_STATE( pxTCB );                                                           \
+		taskRECORD_READY_PRIORITY( ( pxTCB )->uxPriority );                                                \
+		listINSERT_END( &( pxReadyTasksLists[ ( pxTCB )->uxPriority ] ), &( ( pxTCB )->xStateListItem ) ); \
+		tracePOST_MOVED_TASK_TO_READY_STATE( pxTCB )
+#else
+		
+	#define prvAddTaskToReadyList( pxTCB ) /*xGenericListIteam must contain the
+		deadline value */ \
+	traceMOVED_TASK_TO_READY_STATE(pxTCB);														 \
 	vListInsert( &(xReadyTasksListEDF), &( ( pxTCB )->xStateListItem ) );						 
-
 #endif
 /*-----------------------------------------------------------*/
 
@@ -272,11 +275,7 @@ typedef struct tskTaskControlBlock       /* The old naming convention is used to
     ListItem_t xStateListItem;                  /*< The list that the state list item of a task is reference from denotes the state of that task (Ready, Blocked, Suspended ). */
     ListItem_t xEventListItem;                  /*< Used to reference a task from an event list. */
     UBaseType_t uxPriority;                     /*< The priority of the task.  0 is the lowest priority. */
-    StackType_t * pxStack;                     /*< Points to the start of the stack. */
-
-#if ( configUSE_EDF_SCHEDULER == 1 )/*Edited for EDF schedular*/
-    TickType_t xTaskPeriod; /*< Stores the period in tick of the task. > */
-#endif
+    StackType_t * pxStack;                      /*< Points to the start of the stack. */
     char pcTaskName[ configMAX_TASK_NAME_LEN ]; /*< Descriptive name given to the task when created.  Facilitates debugging only. */ /*lint !e971 Unqualified char types are allowed for strings and single characters only. */
 
     #if ( ( portSTACK_GROWTH > 0 ) || ( configRECORD_STACK_HIGH_ADDRESS == 1 ) )
@@ -342,8 +341,10 @@ typedef struct tskTaskControlBlock       /* The old naming convention is used to
     #if ( configUSE_POSIX_ERRNO == 1 )
         int iTaskErrno;
     #endif
-
-
+	/* E.C. : the period of a task */
+	#if ( configUSE_EDF_SCHEDULER == 1 )
+		TickType_t xTaskPeriod; /*< Stores the period in tick of the task. > */
+	#endif
 } tskTCB;
 
 /* The old tskTCB name is maintained above then typedefed to the new TCB_t name
@@ -364,10 +365,12 @@ PRIVILEGED_DATA static List_t xDelayedTaskList2;                         /*< Del
 PRIVILEGED_DATA static List_t * volatile pxDelayedTaskList;              /*< Points to the delayed task list currently being used. */
 PRIVILEGED_DATA static List_t * volatile pxOverflowDelayedTaskList;      /*< Points to the delayed task list currently being used to hold tasks that have overflowed the current tick count. */
 PRIVILEGED_DATA static List_t xPendingReadyList;                         /*< Tasks that have been readied while the scheduler was suspended.  They will be moved to the ready list when the scheduler is resumed. */
-		
-#if ( configUSE_EDF_SCHEDULER == 1 )/*Edited for EDF schedular*/
-PRIVILEGED_DATA static List_t xReadyTasksListEDF; /*< Ready tasks ordered by their deadline. */
-#endif
+
+/* E.C. : the new RedyList */
+	#if ( configUSE_EDF_SCHEDULER == 1 )
+		PRIVILEGED_DATA static List_t xReadyTasksListEDF; /*< Ready tasks ordered by
+		their deadline. */
+	#endif
 
 #if ( INCLUDE_vTaskDelete == 1 )
 
@@ -833,23 +836,26 @@ static void prvAddNewTaskToReadyList( TCB_t * pxNewTCB ) PRIVILEGED_FUNCTION;
     }
 
 #endif /* configSUPPORT_DYNAMIC_ALLOCATION */
-/*-----------------------------------------------------------*/
 
-/*Edited for EDF schedular*/
+		
+/*E.C. */
 #if ( configUSE_EDF_SCHEDULER == 1 )
 
-BaseType_t xTaskPeriodicCreate( TaskFunction_t pxTaskCode,
+    BaseType_t xTaskPeriodicCreate( TaskFunction_t pxTaskCode,
                             const char * const pcName, /*lint !e971 Unqualified char types are allowed for strings and single characters only. */
                             const configSTACK_DEPTH_TYPE usStackDepth,
                             void * const pvParameters,
                             UBaseType_t uxPriority,
-                            TaskHandle_t * const pxCreatedTask, 
-							TickType_t period)
-{
-	 TCB_t * pxNewTCB;
-   BaseType_t xReturn;
+                            TaskHandle_t * const pxCreatedTask,
+														TickType_t period )
+    {
+        TCB_t * pxNewTCB;
+        BaseType_t xReturn;
 
-	 #if ( portSTACK_GROWTH > 0 )
+        /* If the stack grows down then allocate the stack then the TCB so the stack
+         * does not grow into the TCB.  Likewise if the stack grows up then allocate
+         * the TCB then the stack. */
+        #if ( portSTACK_GROWTH > 0 )
             {
                 /* Allocate space for the TCB.  Where the memory comes from depends on
                  * the implementation of the port malloc function and whether or not static
@@ -900,7 +906,7 @@ BaseType_t xTaskPeriodicCreate( TaskFunction_t pxTaskCode,
                     pxNewTCB = NULL;
                 }
             }
-           #endif /* portSTACK_GROWTH */
+        #endif /* portSTACK_GROWTH */
 
         if( pxNewTCB != NULL )
         {
@@ -913,14 +919,17 @@ BaseType_t xTaskPeriodicCreate( TaskFunction_t pxTaskCode,
             #endif /* tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE */
 
             prvInitialiseNewTask( pxTaskCode, pcName, ( uint32_t ) usStackDepth, pvParameters, uxPriority, pxCreatedTask, pxNewTCB, NULL );
+        
 					
-					/*Edited for EDF schedular*/
-				pxNewTCB->xTaskPeriod = period;/*E.C. : initialize the period */
-				listSET_LIST_ITEM_VALUE( &( ( pxNewTCB )->xStateListItem ),\
-                ( pxNewTCB)->xTaskPeriod + xTickCount);/*E.C. : insert the period value in the generic list iteam before to add the task in RL: */
-            //prvAddTaskToReadyList( pxNewTCB );	
-            prvAddNewTaskToReadyList( pxNewTCB );				
-            xReturn = pdPASS;
+			/*E.C. : initialize the period */
+			pxNewTCB->xTaskPeriod = period;
+			/*E.C. : insert the period value in the generic list iteam before to add the task 
+					in RL: */
+			listSET_LIST_ITEM_VALUE( &( ( pxNewTCB )->xStateListItem ), ( pxNewTCB )->xTaskPeriod + xTaskGetTickCount() );	
+			//prvAddTaskToReadyList( pxNewTCB );
+			prvAddNewTaskToReadyList( pxNewTCB );
+            
+			xReturn = pdPASS;
         }
         else
         {
@@ -928,10 +937,11 @@ BaseType_t xTaskPeriodicCreate( TaskFunction_t pxTaskCode,
         }
 
         return xReturn;
-    
-}		
-#endif /* configSUPPORT_EDF_DYNAMIC_ALLOCATION */
+    }
+
+#endif /* configSUPPORT_DYNAMIC_ALLOCATION */
 /*-----------------------------------------------------------*/
+
 static void prvInitialiseNewTask( TaskFunction_t pxTaskCode,
                                   const char * const pcName, /*lint !e971 Unqualified char types are allowed for strings and single characters only. */
                                   const uint32_t ulStackDepth,
@@ -2143,24 +2153,26 @@ void vTaskStartScheduler( void )
         }
     #else /* if ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
         {
-/*Edited for EDF schedular*/
-					#if (configUSE_EDF_SCHEDULER == 1)
- {
-        TickType_t initIDLEPeriod = 100;//200
-        xReturn = xTaskPeriodicCreate( prvIdleTask, "IDLE", configMINIMAL_STACK_SIZE, (void * ) NULL, 
-					( tskIDLE_PRIORITY | portPRIVILEGE_BIT ), NULL, initIDLEPeriod );
- }
- #else
-            /* The Idle task is being created using dynamically allocated RAM. */
-            xReturn = xTaskCreate( prvIdleTask,
-                                   configIDLE_TASK_NAME,
-                                   configMINIMAL_STACK_SIZE,
-                                   ( void * ) NULL,
-                                   portPRIVILEGE_BIT,  /* In effect ( tskIDLE_PRIORITY | portPRIVILEGE_BIT ), but tskIDLE_PRIORITY is zero. */
-                                   &xIdleTaskHandle ); /*lint !e961 MISRA exception, justified as it is not a redundant explicit cast to all supported compilers. */
-#endif
-
-        }
+			/*E.C. : */
+			#if (configUSE_EDF_SCHEDULER == 1)
+			{
+				TickType_t initIDLEPeriod = 200;
+				xReturn = xTaskPeriodicCreate( 	prvIdleTask,"IDLE",configMINIMAL_STACK_SIZE, 
+												(void * ) NULL, portPRIVILEGE_BIT,&xIdleTaskHandle,
+												initIDLEPeriod );
+			}
+			#else
+            {
+				/* The Idle task is being created using dynamically allocated RAM. */
+				xReturn = xTaskCreate( prvIdleTask,
+									   configIDLE_TASK_NAME,
+									   configMINIMAL_STACK_SIZE,
+									   ( void * ) NULL,
+									   portPRIVILEGE_BIT,  /* In effect ( tskIDLE_PRIORITY | portPRIVILEGE_BIT ), but tskIDLE_PRIORITY is zero. */
+									   &xIdleTaskHandle ); /*lint !e961 MISRA exception, justified as it is not a redundant explicit cast to all supported compilers. */
+			}
+			#endif
+		}
     #endif /* configSUPPORT_STATIC_ALLOCATION */
 
     #if ( configUSE_TIMERS == 1 )
@@ -2864,6 +2876,7 @@ BaseType_t xTaskIncrementTick( void )
     TCB_t * pxTCB;
     TickType_t xItemValue;
     BaseType_t xSwitchRequired = pdFALSE;
+    
 
     /* Called by the portable layer each time a tick interrupt occurs.
      * Increments the tick then checks to see if the new tick value will cause any
@@ -2944,59 +2957,44 @@ BaseType_t xTaskIncrementTick( void )
                     {
                         mtCOVERAGE_TEST_MARKER();
                     }
-                    
-							/*Edited for EDF schedular*/
-                    #if ( configUSE_EDF_SCHEDULER == 1)
-							{
-								listSET_LIST_ITEM_VALUE( &( ( pxTCB )->xStateListItem ), ( ( pxTCB )->xTaskPeriod )+ xTickCount );
-							}
-                    #endif
-							/*Edited for EDF schedular*/
 
+					/*E.C. Missing Changes : Calculate New Deadline*/
+					#if (configUSE_EDF_SCHEDULER == 1)
+						listSET_LIST_ITEM_VALUE( &( ( pxTCB )->xStateListItem ), ( pxTCB)->xTaskPeriod + xTaskGetTickCount() );
+					#endif
+					
                     /* Place the unblocked task into the appropriate ready
                      * list. */
                     prvAddTaskToReadyList( pxTCB );
-
+					
+					/*E.C. Missing Changes: Context Switching will always take place 
+					 *to always restore task with earlist deadline at head of EDF RL */
+					#if (configUSE_EDF_SCHEDULER == 1)
+						xSwitchRequired = pdTRUE;
+					#endif
+					
                     /* A task being unblocked cannot cause an immediate
                      * context switch if preemption is turned off. */
                     #if ( configUSE_PREEMPTION == 1 )
                         {
-                            #if ( configUSE_EDF_SCHEDULER == 1 )
-								{
-									if( pxTCB->xStateListItem.xItemValue <= pxCurrentTCB->xStateListItem.xItemValue )
-									{
-										xSwitchRequired = pdTRUE;
-									}
-									else
-									{
-										mtCOVERAGE_TEST_MARKER();
-									}
-								}
-								/* END of EDF */
-                            #else
-						    {
                             /* Preemption is on, but a context switch should
                              * only be performed if the unblocked task has a
                              * priority that is equal to or higher than the
                              * currently executing task. */
-                              if( pxTCB->uxPriority >= pxCurrentTCB->uxPriority )
-                               {
-                                 xSwitchRequired = pdTRUE;
-                              }
-                             else
-                              {
-                                mtCOVERAGE_TEST_MARKER();
-                              }
+                            if( pxTCB->uxPriority >= pxCurrentTCB->uxPriority )
+                            {
+                                xSwitchRequired = pdTRUE;
                             }
-                         #endif
+                            else
+                            {
+                                mtCOVERAGE_TEST_MARKER();
+                            }
                         }
-                  #endif /* configUSE_PREEMPTION */
-                }   
-            
+                    #endif /* configUSE_PREEMPTION */
+                }
             }
-        
         }
-      
+
         /* Tasks of equal priority to the currently running task will share
          * processing time (time slice) if preemption is on, and the application
          * writer has not explicitly turned time slicing off. */
@@ -3223,21 +3221,20 @@ void vTaskSwitchContext( void )
 
         /* Select a new task to run using either the generic C or port
          * optimised asm code. */
-        //taskSELECT_HIGHEST_PRIORITY_TASK(); /*lint !e9079 void * is used as this macro is used with timers and co-routines too.  Alignment is known to be fine as the type of the pointer stored and retrieved is the same. */
-        				/*Edited for EDF schedular*/
-        #if (configUSE_EDF_SCHEDULER == 0)
-          {
-              taskSELECT_HIGHEST_PRIORITY_TASK();
-          }
-       #else
-          {
-              pxCurrentTCB = (TCB_t * ) listGET_OWNER_OF_HEAD_ENTRY( &(xReadyTasksListEDF ) );
-          }
-      #endif
-
-        traceTASK_SWITCHED_IN();
-
-        /* After the new task is switched in, update the global errno. */
+        /* E.C. : */
+		#if (configUSE_EDF_SCHEDULER == 0)
+		{
+			taskSELECT_HIGHEST_PRIORITY_TASK(); /*lint !e9079 void * is used as this macro is used with timers and co-routines too.  Alignment is known to be fine as the type of the pointer stored and retrieved is the same. */
+			traceTASK_SWITCHED_IN();			
+		}
+		#else
+		{
+			pxCurrentTCB = (TCB_t * ) listGET_OWNER_OF_HEAD_ENTRY( &(xReadyTasksListEDF ) );
+			traceTASK_SWITCHED_IN();			
+		}
+		#endif
+        
+		/* After the new task is switched in, update the global errno. */
         #if ( configUSE_POSIX_ERRNO == 1 )
             {
                 FreeRTOS_errno = pxCurrentTCB->iTaskErrno;
@@ -3605,7 +3602,6 @@ static portTASK_FUNCTION( prvIdleTask, pvParameters )
 {
     /* Stop warnings. */
     ( void ) pvParameters;
-
     /** THIS IS THE RTOS IDLE TASK - WHICH IS CREATED AUTOMATICALLY WHEN THE
      * SCHEDULER IS STARTED. **/
 
@@ -3613,18 +3609,18 @@ static portTASK_FUNCTION( prvIdleTask, pvParameters )
      * the idle task is responsible for deleting the task's secure context, if
      * any. */
     portALLOCATE_SECURE_CONTEXT( configMINIMAL_SECURE_STACK_SIZE );
-
+	
     for( ; ; )
     {
-        /*Edited for EDF schedular*/
-                #if ( configUSE_EDF_SCHEDULER == 1 )
-				{
-					listSET_LIST_ITEM_VALUE( &( ( pxCurrentTCB )->xStateListItem ), ( pxCurrentTCB )->xTaskPeriod + xTaskGetTickCount() );
+		#if( configUSE_EDF_SCHEDULER == 1)
+		{
+			/*E.C. Modify the idle task to keep it always the farest deadline*/
+			//TCB_t * pxTCB = xTaskGetIdleTaskHandle() ;
+			listSET_LIST_ITEM_VALUE( &( ( pxCurrentTCB )->xStateListItem ), ( pxCurrentTCB )->xTaskPeriod + xTaskGetTickCount() );
 			listINSERT_END( &(xReadyTasksListEDF), &( ( pxCurrentTCB )->xStateListItem ) );
-            }
-        #endif
-				
-        /* See if any tasks have deleted themselves - if so then the idle task
+		}
+		#endif
+			/* See if any tasks have deleted themselves - if so then the idle task
          * is responsible for freeing the deleted task's TCB and stack. */
         prvCheckTasksWaitingTermination();
 
@@ -3722,11 +3718,8 @@ static portTASK_FUNCTION( prvIdleTask, pvParameters )
                 }
             }
         #endif /* configUSE_TICKLESS_IDLE */
-        			
-
-	}
+    }
 }
-
 /*-----------------------------------------------------------*/
 
 #if ( configUSE_TICKLESS_IDLE != 0 )
@@ -3849,7 +3842,14 @@ static void prvInitialiseTaskLists( void )
     vListInitialise( &xDelayedTaskList1 );
     vListInitialise( &xDelayedTaskList2 );
     vListInitialise( &xPendingReadyList );
-
+		
+		
+	/* E.C. */
+	#if ( configUSE_EDF_SCHEDULER == 1 )
+	{
+		vListInitialise( &xReadyTasksListEDF );
+	}
+	#endif
     #if ( INCLUDE_vTaskDelete == 1 )
         {
             vListInitialise( &xTasksWaitingTermination );
@@ -3861,13 +3861,6 @@ static void prvInitialiseTaskLists( void )
             vListInitialise( &xSuspendedTaskList );
         }
     #endif /* INCLUDE_vTaskSuspend */
-		
-		  /* E.C. */
-    #if ( configUSE_EDF_SCHEDULER == 1 )
-        {
-            vListInitialise( &xReadyTasksListEDF );
-        }
-    #endif		
 
     /* Start with pxDelayedTaskList using list1 and the pxOverflowDelayedTaskList
      * using list2. */
