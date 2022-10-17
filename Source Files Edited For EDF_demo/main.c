@@ -61,6 +61,7 @@
 #include "task.h"
 #include "lpc21xx.h"
 #include "queue.h"
+
 /* Peripheral includes. */
 #include "serial_new.h"
 #include "GPIO.h"
@@ -89,101 +90,255 @@ static void prvSetupHardware( void );
 /*-----------------------------------------------------------*/
 
 
+TaskHandle_t 	* Periodic_Transmitter_Hnd =NULL;
+TaskHandle_t 	* Uart_Receiver_Hnd = NULL;
+TaskHandle_t 	* Button_2_Hnd = NULL;
+TaskHandle_t 	* Button_1_Hnd = NULL;
+TaskHandle_t 	* Load1_Hnd = NULL;
+TaskHandle_t 	* Load2_Hnd = NULL;
+
+
+//QueueHandle_t xQueue ;														
+QueueHandle_t xQueue1 ;														
+QueueHandle_t xQueue2 ;
+QueueHandle_t xQueue3 ;														
+
+//Donot forget to change pin mode in GPIO_cfg.c file 														
+#define BUT1_PIN PIN0
+#define BUT2_PIN PIN1
+#define BUT1_PORT PORT_0
+#define BUT2_PORT PORT_0
+
+#define BUT_TASK_MAX_LENGHT 10
 /*
- * Application entry point:
- * Starts all the other tasks, then starts the scheduler. 
- */
-					
-QueueHandle_t xQueue ;														
-														
-
-void Button1 ( void *pvParameter){
-	static int CurrentState ;
-	static int PrevState    ;
-	const char * h = "b1high";
-	const char * l = "b1low";
+//Periodicity: 50, Deadline: 50
+This task will monitor rising and falling edge on button 1 and send this event to the consumer task. 
+(Note: The rising and failling edges are treated as separate events, hence they have separate strings
+*/
+void Button_1_Monitor ( void *pvParameter){
+	 pinState_t  CurrentState = GPIO_read(BUT1_PORT,BUT1_PIN);
+	 pinState_t  PrevState    = GPIO_read(BUT1_PORT,BUT1_PIN);
+	 TickType_t xLastWakeTime = xTaskGetTickCount();
+	const char * FallingString = "\nBUT1_FALL";
+	const char * RisingString  = "\nBUT1_RISE";
 	for(;;){
-	CurrentState = GPIO_read(PORT_0,PIN0);
+	CurrentState = GPIO_read(BUT1_PORT,BUT1_PIN);
 	if (CurrentState != PrevState) 
-		{
+		{//edge cahnge detected
 			PrevState = CurrentState ;
-			if (CurrentState) xQueueSend( xQueue,( void * ) &h,( TickType_t ) 100 );
-			else xQueueSend( xQueue,( void * ) &l,( TickType_t ) 100 );
+			if (CurrentState){
+			//Rising Edge Detected
+		
+						int i =0;
+		for( i = 0 ; i < 10 ; i++){
+        	 xQueueSend( xQueue1,(&RisingString[i]), 50 ) ;
+		}
+			}
+			else {
+				//Falling Edge Detected
+
+						int i1 =0;
+		for( i1 = 0 ; i1 < 10 ; i1++){
+        	 xQueueSend( xQueue1,(&FallingString[i1]), 50 ) ;
+		}
+			}
 		}
 	else 
 		{
-			/** **/
-		}}
+			//do nothing or clear queue
+			//xQueueReset(xQueue1);
+		}
+	vTaskDelayUntil( &xLastWakeTime , 50);}
 	
 }
 
-void Button2 ( void *pvParameter){
-	static int CurrentState ;
-	static int PrevState    ;
-	const char * h = "b2high";
-	const char * l = "b2low";
+
+
+
+/*
+//Periodicity: 50, Deadline: 50
+This task will monitor rising and falling edge on button 1 and send this event to the consumer task. 
+(Note: The rising and failling edges are treated as separate events, hence they have separate strings
+*/
+void Button_2_Monitor ( void *pvParameter){
+	 pinState_t  CurrentState = GPIO_read(BUT2_PORT,BUT2_PIN);
+	 pinState_t  PrevState    = GPIO_read(BUT2_PORT,BUT2_PIN);
+	TickType_t xLastWakeTime2 = xTaskGetTickCount();
+	const char * FallingString = "\nBUT2_FALL";
+	const char * RisingString = "\nBUT2_RISE";
 	for(;;){
-	CurrentState = GPIO_read(PORT_0,PIN1);
+	CurrentState = GPIO_read(BUT2_PORT,BUT2_PIN);
 	if (CurrentState != PrevState) 
-		{
+		{//edge cahnge detected
 			PrevState = CurrentState ;
-			if (CurrentState) xQueueSend( xQueue,( void * ) &h,( TickType_t ) 100 );
-			else xQueueSend( xQueue,( void * ) &l,( TickType_t ) 100 );
+			if (CurrentState){
+			//Rising Edge Detected
+		
+						int i =0;
+		for( i = 0 ; i < 10 ; i++){
+        	 xQueueSend( xQueue2,(&RisingString[i]), 50 ) ;
+		}
+			}
+			else {
+				//Falling Edge Detected
+
+						int i1 =0;
+		for( i1 = 0 ; i1 < 10 ; i1++){
+        	 xQueueSend( xQueue2,(&FallingString[i1]), 50 ) ;
+		}
+			}
 		}
 	else 
 		{
-			/** **/
+			//do nothing or clear queue
+			//xQueueReset(xQueue2);
+		}
+	vTaskDelayUntil( &xLastWakeTime2 , 50);}
+	
+}
+
+
+
+#define UART_RECEIVER_MAX_LENGHT 29
+
+
+#define Periodic_Transmitter_PERIODICITY 100
+/*
+Task 3: ""Periodic_Transmitter"", {Periodicity: 100, Deadline: 100}
+This task will send preiodic string every 100ms to the consumer task*/
+#if 1
+void Periodic_Transmitter (void *pvParameter)
+{
+	TickType_t  PreviousWakeTime = xTaskGetTickCount();
+	const char * s ="\nFrom Periodic_Transmitter..!\n";
+	for(;;){
+		//Write to the the Queue
+    if( xQueue3 != 0 )
+    {
+       /* Send an unsigned long.  Wait for 10 ticks for space to become available if necessary. */
+		int i =0;
+		for( i = 0 ; i < 29 ; i++){
+        	 xQueueSend( xQueue3,(&s[i]), Periodic_Transmitter_PERIODICITY ) ;
 		}
 	}
+		vTaskDelayUntil(&PreviousWakeTime,Periodic_Transmitter_PERIODICITY);//Delay a task until a specified time. This function can be used by periodic tasks to ensure a constant execution frequency.
+	}
+}
+#endif
+
+#define UART_RECEIVER_PERIODICITY 20
+char forTest[10]="\nTEST_BUT1";
+/*
+Task 4: ""Uart_Receiver"", {Periodicity: 20, Deadline: 20}
+This is the consumer task which will write on UART any received string from other tasks	*/
+void Uart_Receiver (void *pvParameter)
+{
+	TickType_t  PreviousWakeTime = xTaskGetTickCount();
 	
+  signed char button1_string[10] ;
+	signed char button2_string[10];
+	signed  char string_buffer3[29];
+	int j,t,h;
+	
+	for(;;){
+		//Read from Queue and send it over UART TX
+				#if 1
+		if(uxQueueMessagesWaiting(xQueue1) != 0 ){
+			#if 1
+			for( j = 0 ; j < BUT_TASK_MAX_LENGHT; j++){
+				xQueueReceive( xQueue1,  (button1_string+j),  0 ); //0 >> DONOT BLOCK THE CODE		
+			}
+			vSerialPutString(( signed char *)&button1_string,10);
+			#endif
+		xQueueReset(xQueue1);
+			}
+		if(uxQueueMessagesWaiting(xQueue2) != 0 ){
+			#if 1
+			for( t = 0 ; t < BUT_TASK_MAX_LENGHT; t++){
+			xQueueReceive( xQueue2,  (button2_string+t),  0 ); //0 >> DONOT BLOCK THE CODE		
+			}
+			vSerialPutString(( signed char *)&button2_string,10);
+			#endif
+
+		xQueueReset(xQueue2);
+			}
+		if(uxQueueMessagesWaiting(xQueue3) != 0){
+			for( h = 0 ; h < 29; h++){
+				xQueueReceive( xQueue3,  (string_buffer3+h),  0 ); //0 >> DONOT BLOCK THE CODE		
+			}
+		vSerialPutString(( signed char *)&string_buffer3,UART_RECEIVER_MAX_LENGHT);
+		xQueueReset(xQueue3);
+			}
+				#endif
+			
+		vTaskDelayUntil(&PreviousWakeTime,UART_RECEIVER_PERIODICITY);//Delay a task until a specified time. This function can be used by periodic tasks to ensure a constant execution frequency.
+	}
+
 }
 
-void transmitter (void *pvParameter)
-{
-	const char * s = "string"; 
+
+
+
+void Load1 (void *pvParameter){
+	TickType_t  PreviousWakeTime = xTaskGetTickCount();S
+	uint16_t a;
 	for(;;){
-	xQueueSend( xQueue,( void * ) &s,( TickType_t ) 100 );
+	GPIO_write(PORT_0,PIN2,1);
+	for (a =0 ; a<10000;a++){}//test 10,000 gives 1.7ms to get 5ms write>>
+	GPIO_write(PORT_0,PIN2,0);
 
+	vTaskDelayUntil(&PreviousWakeTime,10);
 	}
-	}
+}
 
+void Load2 (void *pvParameter){
+	TickType_t  PreviousWakeTime = xTaskGetTickCount();
 
-
-void receiver (void *pvParameter)
-{
-	
-	char string[10];
+	uint16_t b;
 	for(;;){
-	xQueueReceive( xQueue,&string,( TickType_t ) 10 );
-	vSerialPutString((const signed char *)&string,10);
-	}
+			//for loop to take excution time about 
+		GPIO_write(PORT_0,PIN3,1);//consume 0.65us
+		for ( b=0 ; b<10000;b++){}//"note: test load1 first" test 10,000 gives 6.44ms to get 12ms write>>
+		GPIO_write(PORT_0,PIN3,0);//18634>>7.58ms
 
+	vTaskDelayUntil(&PreviousWakeTime,100);
+	}
 }
 
 
-
+//for debug
 void TestGPIO(void *pvParameter){
+	TickType_t  PreviousWakeTime = xTaskGetTickCount();
 	for(;;){
-	GPIO_write(PORT_0,PIN2,!GPIO_read(PORT_0,PIN2));
-		vTaskDelay(5 / portTICK_PERIOD_MS);
+	GPIO_write(PORT_0,PIN2,!GPIO_read(PORT_0,PIN2));//toggling
+	vTaskDelayUntil(&PreviousWakeTime,5);//Delay a task until a specified time. This function can be used by periodic tasks to ensure a constant execution frequency.
 	}
 }
+
+
 
 int main( void )
 {
+	
 	/* Setup the hardware for use with the Keil demo board. */
 	prvSetupHardware();
-  xSerialPortInitMinimal(ser9600);
+ // xSerialPortInitMinimal(ser115200);
 	
 
-	//xQueue=xQueueCreate( 10, sizeof( char ) ) ;
-	//xTaskPeriodicCreate( Button1, ( const char * ) "Button 1", configMINIMAL_STACK_SIZE, NULL,1, NULL, 50 );
-	//xTaskPeriodicCreate( Button2, ( const char * ) "Button 2", configMINIMAL_STACK_SIZE, NULL,1, NULL, 50 );
-	//xTaskPeriodicCreate( transmitter, ( const char * ) "transmitter", configMINIMAL_STACK_SIZE, NULL,1, NULL, 100 );
-	//xTaskPeriodicCreate( receiver , ( const char * ) "receiver", configMINIMAL_STACK_SIZE, NULL,1, NULL, 20 );
-	
+
 	#if(configUSE_EDF_SCHEDULER == 1)
-	xTaskPeriodicCreate( TestGPIO , ( const char * ) "Test", configMINIMAL_STACK_SIZE, NULL,1, NULL, 2 );
+	xQueue1=xQueueCreate( 10, sizeof( char ));
+	xQueue2=xQueueCreate( 10, sizeof( char ));
+	xQueue3=xQueueCreate( 29, sizeof( char ));
+
+	xTaskPeriodicCreate( Button_1_Monitor, ( const char * ) "Button_1_Monitor", configMINIMAL_STACK_SIZE, NULL,1, Button_1_Hnd, 50 );
+	xTaskPeriodicCreate( Button_2_Monitor, ( const char * ) "Button_2_Monitor", configMINIMAL_STACK_SIZE, NULL,1, Button_2_Hnd, 50 );
+	xTaskPeriodicCreate( Periodic_Transmitter, ( const char * ) "Periodic_Transmitter", configMINIMAL_STACK_SIZE, NULL,1, Periodic_Transmitter_Hnd, Periodic_Transmitter_PERIODICITY );
+	xTaskPeriodicCreate( Uart_Receiver , ( const char * ) "Uart_Receiver", configMINIMAL_STACK_SIZE, NULL,1, Uart_Receiver_Hnd, UART_RECEIVER_PERIODICITY );
+	xTaskPeriodicCreate( Load1 , ( const char * ) "Load1", configMINIMAL_STACK_SIZE, NULL,1, Load1_Hnd, 10 );
+	xTaskPeriodicCreate( Load2 , ( const char * ) "Load2", configMINIMAL_STACK_SIZE, NULL,1, Load2_Hnd, 100 );
+	//For debug
+	///xTaskPeriodicCreate( TestGPIO , ( const char * ) "Test", configMINIMAL_STACK_SIZE, NULL,1, NULL, 5 );
 	#else
 	xTaskCreate( TestGPIO , ( const char * ) "Test", configMINIMAL_STACK_SIZE, NULL,1, NULL );
 	#endif
@@ -220,8 +375,7 @@ static void configTimer1(void)
 	T1TCR |= 0x1;
 }
 
-static void prvSetupHardware( void )
-{
+static void prvSetupHardware( void ){
 	/* Perform the hardware setup required.  This is minimal as most of the
 	setup is managed by the settings in the project file. */
 
@@ -240,8 +394,7 @@ static void prvSetupHardware( void )
 /*-----------------------------------------------------------*/
 #if (configUSE_TICK_HOOK == 1) 
 void vApplicationTickHook( void ){
-		GPIO_write(PORT_0,PIN3,!GPIO_read(PORT_0,PIN3));
-	//GPIO_write(PORT_0,PIN2,!GPIO_read(PORT_0,PIN3));
+		GPIO_write(PORT_0,PIN4,!GPIO_read(PORT_0,PIN4));
 }
 
 #endif
@@ -249,9 +402,7 @@ void vApplicationTickHook( void ){
 
 #if (configUSE_IDLE_HOOK == 1) 
 void vApplicationIdleHook( void ){
-GPIO_write(PORT_0,PIN4,!GPIO_read(PORT_0,PIN4));
+GPIO_write(PORT_0,PIN5,!GPIO_read(PORT_0,PIN5));
 }
 
 #endif
-
-
