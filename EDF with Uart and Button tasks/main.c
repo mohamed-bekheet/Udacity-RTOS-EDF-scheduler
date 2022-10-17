@@ -108,6 +108,8 @@ QueueHandle_t xQueue3 ;
 #define BUT2_PIN PIN1
 #define BUT1_PORT PORT_0
 #define BUT2_PORT PORT_0
+
+#define BUT_TASK_MAX_LENGHT 10
 /*
 //Periodicity: 50, Deadline: 50
 This task will monitor rising and falling edge on button 1 and send this event to the consumer task. 
@@ -117,8 +119,8 @@ void Button_1_Monitor ( void *pvParameter){
 	 pinState_t  CurrentState = GPIO_read(BUT1_PORT,BUT1_PIN);
 	 pinState_t  PrevState    = GPIO_read(BUT1_PORT,BUT1_PIN);
 	 TickType_t xLastWakeTime = xTaskGetTickCount();
-	const char * FallingString = "BUT1_FALL\n";
-	const char * RisingString = "BUT1_RISE\n";
+	const char * FallingString = "\nBUT1_FALL";
+	const char * RisingString  = "\nBUT1_RISE";
 	for(;;){
 	CurrentState = GPIO_read(BUT1_PORT,BUT1_PIN);
 	if (CurrentState != PrevState) 
@@ -126,18 +128,25 @@ void Button_1_Monitor ( void *pvParameter){
 			PrevState = CurrentState ;
 			if (CurrentState){
 			//Rising Edge Detected
-			xQueueSend( xQueue1,( void * ) &RisingString,( TickType_t ) 50 );
-				
+		
+						int i =0;
+		for( i = 0 ; i < 10 ; i++){
+        	 xQueueSend( xQueue1,(&RisingString[i]), 50 ) ;
+		}
 			}
 			else {
 				//Falling Edge Detected
-			xQueueSend( xQueue1,( void * ) &FallingString,( TickType_t ) 50 );
-		
-		}}
+
+						int i1 =0;
+		for( i1 = 0 ; i1 < 10 ; i1++){
+        	 xQueueSend( xQueue1,(&FallingString[i1]), 50 ) ;
+		}
+			}
+		}
 	else 
 		{
 			//do nothing or clear queue
-			xQueueReset(xQueue1);
+			//xQueueReset(xQueue1);
 		}
 	vTaskDelayUntil( &xLastWakeTime , 50);}
 	
@@ -155,8 +164,8 @@ void Button_2_Monitor ( void *pvParameter){
 	 pinState_t  CurrentState = GPIO_read(BUT2_PORT,BUT2_PIN);
 	 pinState_t  PrevState    = GPIO_read(BUT2_PORT,BUT2_PIN);
 	TickType_t xLastWakeTime2 = xTaskGetTickCount();
-	const char * FallingString = "BUT2_FALL\n";
-	const char * RisingString = "BUT2_RISE\n";
+	const char * FallingString = "\nBUT2_FALL";
+	const char * RisingString = "\nBUT2_RISE";
 	for(;;){
 	CurrentState = GPIO_read(BUT2_PORT,BUT2_PIN);
 	if (CurrentState != PrevState) 
@@ -164,18 +173,25 @@ void Button_2_Monitor ( void *pvParameter){
 			PrevState = CurrentState ;
 			if (CurrentState){
 			//Rising Edge Detected
-			xQueueSend( xQueue2,( void * ) &RisingString,( TickType_t ) 50 );
-			//xQueueOverwrite(xQueue2,(void*)"R");
+		
+						int i =0;
+		for( i = 0 ; i < 10 ; i++){
+        	 xQueueSend( xQueue2,(&RisingString[i]), 50 ) ;
+		}
 			}
 			else {
 				//Falling Edge Detected
-			xQueueSend( xQueue2,( void * ) &FallingString,( TickType_t ) 50 );
+
+						int i1 =0;
+		for( i1 = 0 ; i1 < 10 ; i1++){
+        	 xQueueSend( xQueue2,(&FallingString[i1]), 50 ) ;
+		}
 			}
 		}
 	else 
 		{
 			//do nothing or clear queue
-			xQueueReset(xQueue2);
+			//xQueueReset(xQueue2);
 		}
 	vTaskDelayUntil( &xLastWakeTime2 , 50);}
 	
@@ -183,9 +199,9 @@ void Button_2_Monitor ( void *pvParameter){
 
 
 
-#define UART_RECEIVER_MAX_LENGHT 28
+#define UART_RECEIVER_MAX_LENGHT 29
 
-#define BUT_TASK_MAX_LENGHT 10
+
 #define Periodic_Transmitter_PERIODICITY 100
 /*
 Task 3: ""Periodic_Transmitter"", {Periodicity: 100, Deadline: 100}
@@ -211,7 +227,7 @@ void Periodic_Transmitter (void *pvParameter)
 #endif
 
 #define UART_RECEIVER_PERIODICITY 20
-
+char forTest[10]="\nTEST_BUT1";
 /*
 Task 4: ""Uart_Receiver"", {Periodicity: 20, Deadline: 20}
 This is the consumer task which will write on UART any received string from other tasks	*/
@@ -228,45 +244,23 @@ void Uart_Receiver (void *pvParameter)
 		GPIO_write(PORT_0,PIN2,!GPIO_read(PORT_0,PIN2));
 		//Read from Queue and send it over UART TX
 				#if 1
-		if(xQueueReceive( xQueue1,  &button1_string,  0 )){
+		if(uxQueueMessagesWaiting(xQueue1) != 0 ){
 			#if 1
 			for( j = 0 ; j < BUT_TASK_MAX_LENGHT; j++){
-				xQueueReceive( xQueue1,  &button1_string,  0 ); //0 >> DONOT BLOCK THE CODE		
+				xQueueReceive( xQueue1,  (button1_string+j),  0 ); //0 >> DONOT BLOCK THE CODE		
 			}
-			vSerialPutString(( signed char *)button1_string,UART_RECEIVER_MAX_LENGHT);
-			#else
-			//vSerialPutString(( signed char *)"\nbutton has : ",UART_RECEIVER_MAX_LENGHT);
-		  xSerialPutChar('B');
-			xSerialPutChar('1');
-			xSerialPutChar(' ');
-			xSerialPutChar('-');
-			xSerialPutChar('>');
-			xSerialPutChar(' ');
-			xSerialPutChar(button1);
-			xSerialPutChar('|');
-			xSerialPutChar('_');
+			vSerialPutString(( signed char *)&button1_string,10);
 			#endif
 		xQueueReset(xQueue1);
 			}
-		if(xQueueReceive( xQueue2,  &button2_string,  0 ) ){
+		if(uxQueueMessagesWaiting(xQueue2) != 0 ){
 			#if 1
 			for( t = 0 ; t < BUT_TASK_MAX_LENGHT; t++){
-			xQueueReceive( xQueue2,  &button2_string,  0 ); //0 >> DONOT BLOCK THE CODE		
+			xQueueReceive( xQueue2,  (button2_string+t),  0 ); //0 >> DONOT BLOCK THE CODE		
 			}
-			vSerialPutString(( signed char *)&button2_string,UART_RECEIVER_MAX_LENGHT);
-			#else
-			//vSerialPutString(( signed char *)"\nbutton2 has : ",UART_RECEIVER_MAX_LENGHT);
-		  xSerialPutChar('B');
-			xSerialPutChar('2');
-			xSerialPutChar(' ');
-			xSerialPutChar('-');
-			xSerialPutChar('>');
-			xSerialPutChar(' ');
-			xSerialPutChar(button1);
-			xSerialPutChar('|');
-			xSerialPutChar('_');
+			vSerialPutString(( signed char *)&button2_string,10);
 			#endif
-			//vSerialPutString(( signed char *)" edge\n",UART_RECEIVER_MAX_LENGHT);
+
 		xQueueReset(xQueue2);
 			}
 		if(uxQueueMessagesWaiting(xQueue3) != 0){
@@ -342,17 +336,8 @@ int main( void )
 	#if(configUSE_EDF_SCHEDULER == 1)
 	xQueue1=xQueueCreate( 10, sizeof( char ));
 	xQueue2=xQueueCreate( 10, sizeof( char ));
-	xQueue3=xQueueCreate( 29, sizeof( char ));
-	#if 0
-	xQueue1=xQueueCreate( 3, sizeof( xMESSAGE * ));
-	
-	
-		
-	if( xQueueSend( xQueue1, ( void * ) &m1, ( TickType_t ) Periodic_Transmitter_PERIODICITY ) != pdPASS )
-					{
-							/* Failed to post the message, even after 10 ticks. */
-					}
-#endif
+	xQueue3=xQueueCreate( 39, sizeof( char ));
+
 	xTaskPeriodicCreate( Button_1_Monitor, ( const char * ) "Button_1_Monitor", configMINIMAL_STACK_SIZE, NULL,1, Button_1_Hnd, 50 );
 	xTaskPeriodicCreate( Button_2_Monitor, ( const char * ) "Button_2_Monitor", configMINIMAL_STACK_SIZE, NULL,1, Button_2_Hnd, 50 );
 	xTaskPeriodicCreate( Periodic_Transmitter, ( const char * ) "Periodic_Transmitter", configMINIMAL_STACK_SIZE, NULL,1, Periodic_Transmitter_Hnd, Periodic_Transmitter_PERIODICITY );
